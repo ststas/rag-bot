@@ -1,0 +1,34 @@
+# Два сервиса: chroma (векторная база) и bot (RAG-бот). LLM работает в Ollama на хосте.
+# Запуск: docker compose run --rm bot [флаги chat.py]
+# Настройки LLM_MODEL, DB_DIR, OLLAMA_URL берутся из .env, см. .env.example.
+# DB_DIR выбирает индекс, который отдаёт сервис chroma (Task3/chroma_db или Task5/chroma_db).
+services:
+  chroma:
+    image: chromadb/chroma:1.5.9
+    volumes:
+      - ./${DB_DIR:-Task3/chroma_db}:/data
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8000"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  bot:
+    build: .
+    image: rag-bot
+    stdin_open: true
+    tty: true
+    depends_on:
+      chroma:
+        condition: service_healthy
+    environment:
+      OLLAMA_URL: ${OLLAMA_URL}
+      LLM_MODEL: ${LLM_MODEL}
+      CHROMA_HOST: chroma
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - hf_cache:/hf_cache
+
+volumes:
+  hf_cache:
